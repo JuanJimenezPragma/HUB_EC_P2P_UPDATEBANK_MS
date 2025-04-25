@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: HUB_EC_P2P_UPDATEBANK_MS
+  
+Mappings: 
+  EnvironmentGeneral: 
+    DevR1: # Dev
+      SqsNotification: "https://sqs.us-east-1.amazonaws.com/686255942838/Task.fifo"
+    CertR1: # Cert NV
+      SqsNotification: "https://sqs.us-east-1.amazonaws.com/727646511395/Task.fifo"
+    ProdR1: # Prod NV
+      SqsNotification: "https://sqs.us-east-1.amazonaws.com/047719651998/Task.fifo"
+    CertR2: # Cert O
+      SqsNotification: "https://sqs.us-west-2.amazonaws.com/727646511395/Task.fifo"
+    ProdR2: # Prod O
+      SqsNotification: "https://sqs.us-west-2.amazonaws.com/047719651998/Task.fifo"
+
+  MappingRegionAccount: 
+    "us-east-1":
+        "686255942838": "DevR1"
+        "727646511395": "CertR1"
+        "047719651998": "ProdR1"
+    "us-west-2":
+        "727646511395": "CertR2"
+        "047719651998": "ProdR2"
+
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        
+  UpdateBankFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: .
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SQS_NOTIFICATION_URL: !FindInMap [EnvironmentGeneral, !FindInMap [MappingRegionAccount, !Ref "AWS::Region", !Ref "AWS::AccountId"], SqsNotification]
+    ReservedConcurrentExecutions: 20
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+        - app.ts
